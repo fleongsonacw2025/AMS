@@ -1,0 +1,178 @@
+@page "/timesheet-report"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3>Timesheet & Labor Cost Report</h3>
+            <button class="btn btn-outline-secondary btn-sm" @onclick='() => Nav.NavigateTo("/punchclock")'>
+                ← Back to Menu
+            </button>
+        </div>
+        <button class="btn btn-success" @onclick="DownloadCsv">
+            <span class="bi bi-download"></span> Export CSV
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Start Date</label>
+                    <input type="date" class="form-control" @bind="startDate" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">End Date</label>
+                    <input type="date" class="form-control" @bind="endDate" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Site</label>
+                    <select class="form-select" @bind="selectedSiteId">
+                        <option value="0">All Sites</option>
+                        @foreach (var site in sites)
+                        {
+                            <option value="@site.Id">@site.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" @onclick="FilterReport">Filter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Labor Cost Summary Card -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white fw-bold">
+            Estimated Labor Costs
+        </div>
+        <div class="card-body p-0">
+            @if (laborCostData == null)
+            {
+                <p class="p-3 text-muted">Loading labor costs...</p>
+            }
+            else if (laborCostData.Count == 0)
+            {
+                <p class="p-3 text-muted">No labor data found for the selected filter.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Employee</th>
+                                <th>Site</th>
+                                <th>Total Hours</th>
+                                @if (AttendanceService.CurrentUser?.Role == UserRole.Admin)
+                                {
+                                    <th>Hourly Rate</th>
+                                    <th>Total Cost</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var costItem in laborCostData)
+                            {
+                                <tr>
+                                    <td>@costItem.EmployeeName</td>
+                                    <td>@costItem.SiteName</td>
+                                    <td>@costItem.TotalHours hrs</td>
+                                    @if (AttendanceService.CurrentUser?.Role == UserRole.Admin)
+                                    {
+                                        <td>@costItem.HourlyRate.ToString("C")</td>
+                                        <td class="fw-bold text-success">@costItem.TotalCost.ToString("C")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                        @if (AttendanceService.CurrentUser?.Role == UserRole.Admin)
+                        {
+                            <tfoot class="table-secondary fw-bold">
+                                <tr>
+                                    <td colspan="2">Total</td>
+                                    <td>@laborCostData.Sum(i => i.TotalHours) hrs</td>
+                                    <td>-</td>
+                                    <td class="text-success">@laborCostData.Sum(i => i.TotalCost).ToString("C")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Raw Punch Timesheet Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white fw-bold">
+            Punch Records
+        </div>
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Employee</th>
+                    <th>Date & Time</th>
+                    <th>Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (reportData != null)
+                {
+                    @foreach (var entry in reportData)
+                    {
+                        <tr>
+                            <td>@entry.EmployeeName</td>
+                            <td>@entry.Date</td>
+                            <td>
+                                <span class="badge @(entry.IsPunchIn ? "bg-success" : "bg-danger")">
+                                    @(entry.IsPunchIn ? "IN" : "OUT")
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<TimesheetEntry>? reportData;
+    private List<LaborCostReportItem>? laborCostData;
+    private List<Site> sites = new();
+
+    private DateTime startDate = DateTime.Today.AddDays(-7);
+    private DateTime endDate = DateTime.Today;
+    private int selectedSiteId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        sites = await AttendanceService.GetSites();
+        await FilterReport();
+    }
+
+    private async Task FilterReport()
+    {
+        reportData = await AttendanceService.GetTimesheetReport();
+        laborCostData = await AttendanceService.GetLaborCostReport(startDate, endDate, selectedSiteId);
+    }
+
+    private async Task DownloadCsv()
+    {
+        var csvContent = await AttendanceService.GetTimesheetCsv();
+        await JS.InvokeVoidAsync("downloadFile", "AMS_History.csv", csvContent);
+    }
+}

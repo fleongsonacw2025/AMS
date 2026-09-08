@@ -1,0 +1,143 @@
+@page "/timesheet-review"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>Timesheet Verification & Exceptions</h3>
+        <span class="badge bg-secondary p-2">Role: @AttendanceService.CurrentUser?.Role</span>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body row g-3">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Select Date</label>
+                <input type="date" class="form-control" @bind="selectedDate" @bind:after="LoadRecords" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Filter Status</label>
+                <select class="form-select" @bind="filterStatus" @bind:after="ApplyFilter">
+                    <option value="All">All Records</option>
+                    <option value="Flagged">Exceptions Only</option>
+                    <option value="Clean">Clean Records</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-outline-primary w-100" @onclick="LoadRecords">Refresh Data</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timesheet Records Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Employee</th>
+                        <th>Site</th>
+                        <th>Type</th>
+                        <th>Punch Time</th>
+                        <th>Exception Status</th>
+                        <th>Verification</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filteredRecords.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No attendance records found for this date.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var record in filteredRecords)
+                        {
+                            <tr class="@(record.IsFlagged ? "table-warning" : "")">
+                                <td class="fw-bold">@(record.User?.FullName ?? "Unknown")</td>
+                                <td>@(record.Site?.Name ?? "N/A")</td>
+                                <td>
+                                    <span class="badge @(record.IsPunchIn ? "bg-success" : "bg-danger")">
+                                        @(record.IsPunchIn ? "CLOCK IN" : "CLOCK OUT")
+                                    </span>
+                                </td>
+                                <td>@record.PunchTime.ToString("hh:mm:ss tt")</td>
+                                <td>
+                                    @if (record.IsFlagged)
+                                    {
+                                        <span class="badge bg-danger" title="@record.FlagReason">
+                                            ⚠️ @(string.IsNullOrEmpty(record.FlagReason) ? "Flagged Anomaly" : record.FlagReason)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Valid</span>
+                                    }
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-success me-1" @onclick="() => VerifyRecord(record)">
+                                        Approve
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DateTime selectedDate = DateTime.Today;
+    private string filterStatus = "All";
+    private List<PunchRecord> allRecords = new();
+    private List<PunchRecord> filteredRecords = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Enforce Supervisor+ Access
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        await LoadRecords();
+    }
+
+    private async Task LoadRecords()
+    {
+        // Fetch all punch records for the given date
+        var records = await AttendanceService.GetAllPunchRecords();
+        allRecords = records.Where(r => r.PunchTime.Date == selectedDate.Date).ToList();
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (filterStatus == "Flagged")
+        {
+            filteredRecords = allRecords.Where(r => r.IsFlagged).ToList();
+        }
+        else if (filterStatus == "Clean")
+        {
+            filteredRecords = allRecords.Where(r => !r.IsFlagged).ToList();
+        }
+        else
+        {
+            filteredRecords = allRecords;
+        }
+    }
+
+    private async Task VerifyRecord(PunchRecord record)
+    {
+        record.IsFlagged = false;
+        record.FlagReason = "Verified by Manager";
+        await AttendanceService.SavePunchRecord(record);
+        await LoadRecords();
+    }
+}

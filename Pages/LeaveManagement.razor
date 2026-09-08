@@ -1,0 +1,188 @@
+@page "/leave-management"
+@using AMS.Models
+@using AMS.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject AttendanceService AttendanceService
+
+<PageTitle>Leave Management - AMS</PageTitle>
+
+<div class="container mt-4">
+    <h3 class="mb-3">Leave Management</h3>
+
+    @if (AttendanceService.CurrentUser == null)
+    {
+        <div class="alert alert-warning">Please log in to manage leave requests.</div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Submit Leave Form -->
+            <div class="col-md-5 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Apply for Leave</h5>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="newLeave" OnValidSubmit="HandleSubmit">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="mb-3">
+                                <label class="form-label">Leave Type</label>
+                                <InputSelect @bind-Value="newLeave.LeaveType" class="form-select">
+                                    @foreach (var type in Enum.GetValues<LeaveType>())
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Start Date</label>
+                                <InputDate @bind-Value="newLeave.StartDate" class="form-control" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">End Date</label>
+                                <InputDate @bind-Value="newLeave.EndDate" class="form-control" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Reason</label>
+                                <InputTextArea @bind-Value="newLeave.Reason" class="form-control" rows="3" />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">Submit Request</button>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leave Request Lists -->
+            <div class="col-md-7 mb-4">
+                <!-- Pending Approvals for Supervisors/Admins -->
+                @if (AttendanceService.CurrentUser.Role != UserRole.Cleaner)
+                {
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="card-title mb-0">Pending Approvals</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Type</th>
+                                        <th>Dates</th>
+                                        <th>Reason</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (!pendingRequests.Any())
+                                    {
+                                        <tr><td colspan="5" class="text-center py-3 text-muted">No pending leave requests.</td></tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var req in pendingRequests)
+                                        {
+                                            <tr>
+                                                <td>@req.User?.FullName</td>
+                                                <td><span class="badge bg-info text-dark">@req.LeaveType</span></td>
+                                                <td>@req.StartDate.ToString("MMM dd") - @req.EndDate.ToString("MMM dd")</td>
+                                                <td>@req.Reason</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-success me-1" @onclick="() => Approve(req.Id)">Approve</button>
+                                                    <button class="btn btn-sm btn-danger" @onclick="() => Reject(req.Id)">Reject</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- User Personal History -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="card-title mb-0">My Leave History</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Dates</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!myRequests.Any())
+                                {
+                                    <tr><td colspan="3" class="text-center py-3 text-muted">No leave requests found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var req in myRequests)
+                                    {
+                                        <tr>
+                                            <td>@req.LeaveType</td>
+                                            <td>@req.StartDate.ToString("yyyy-MM-dd") to @req.EndDate.ToString("yyyy-MM-dd")</td>
+                                            <td>
+                                                <span class="badge bg-@(req.Status == RequestStatus.Approved ? "success" : req.Status == RequestStatus.Rejected ? "danger" : "warning")">
+                                                    @req.Status
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private LeaveRequest newLeave = new() { StartDate = DateTime.Today, EndDate = DateTime.Today };
+    private List<LeaveRequest> myRequests = new();
+    private List<LeaveRequest> pendingRequests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        myRequests = await AttendanceService.GetUserLeaveRequests();
+        if (AttendanceService.CurrentUser?.Role != UserRole.Cleaner)
+        {
+            pendingRequests = await AttendanceService.GetPendingLeaveRequests();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        await AttendanceService.SubmitLeaveRequest(newLeave);
+        newLeave = new LeaveRequest { StartDate = DateTime.Today, EndDate = DateTime.Today };
+        await LoadData();
+    }
+
+    private async Task Approve(int id)
+    {
+        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Approved);
+        await LoadData();
+    }
+
+    private async Task Reject(int id)
+    {
+        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Rejected);
+        await LoadData();
+    }
+}

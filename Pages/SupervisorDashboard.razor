@@ -1,0 +1,46 @@
+@page "/supervisor-dashboard"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <h3>Supervisor Dashboard</h3>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">Active Employees</div>
+        <div class="card-body">
+            @if (activeEmployees == null) { <p>Loading...</p> }
+            else {
+                <table class="table">
+                    <thead><tr><th>Name</th><th>Site</th><th>In Since</th></tr></thead>
+                    <tbody>
+                        @foreach (var emp in activeEmployees) {
+                            <tr><td>@emp.Name</td><td>@emp.SiteName</td><td>@emp.ClockedInAt</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ActiveEmployee>? activeEmployees;
+    private List<CorrectionRequest> pendingRequests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor) {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+        activeEmployees = await AttendanceService.GetActiveEmployees();
+        pendingRequests = await AttendanceService.GetPendingCorrections();
+    }
+
+    private async Task Handle(CorrectionRequest req, RequestStatus status) {
+        await AttendanceService.UpdateCorrectionStatus(req, status);
+        pendingRequests.Remove(req);
+    }
+}

@@ -1,0 +1,88 @@
+﻿@using AMS.Models
+@using Microsoft.AspNetCore.Components.Routing
+@inject AMS.Services.AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">AMS System</a>
+    </div>
+</div>
+
+<div class="flex-column">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="punchclock" Match="NavLinkMatch.All">
+                <span class="bi bi-clock-fill" aria-hidden="true"></span> Punch Clock
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="leave-management">
+                <span class="bi bi-calendar-event-fill" aria-hidden="true"></span> Leave Management
+            </NavLink>
+        </div>
+
+        @if (AttendanceService.CurrentUser?.Role >= UserRole.Supervisor)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="attendance-dashboard">
+                    <span class="bi bi-speedometer2" aria-hidden="true"></span> Attendance Dashboard
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="supervisor-dashboard">
+                    <span class="bi bi-person-badge-fill" aria-hidden="true"></span> Supervisor
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="timesheet-review">
+                    <span class="bi bi-check-circle-fill" aria-hidden="true"></span> Timesheet Review
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="correction-requests">
+                    <span class="bi bi-pencil-square" aria-hidden="true"></span> Corrections
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="user-management">
+                    <span class="bi bi-people-fill" aria-hidden="true"></span> User Management
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="timesheet-report">
+                    <span class="bi bi-file-earmark-text" aria-hidden="true"></span> Reports
+                </NavLink>
+            </div>
+        }
+
+        @if (AttendanceService.CurrentUser?.Role == UserRole.Admin || AttendanceService.CurrentUser?.Role == UserRole.SystemAdmin)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="audit-logs">
+                    <span class="bi bi-journal-text" aria-hidden="true"></span> Audit Logs
+                </NavLink>
+            </div>
+        }
+
+        <div class="nav-item px-3 mt-4">
+            <button class="btn btn-link nav-link text-white w-100 text-start" @onclick="Logout">
+                <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
+            </button>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private void Logout()
+    {
+        AttendanceService.Logout();
+        Nav.NavigateTo("/login");
+    }
+
+    protected override void OnInitialized()
+    {
+        AttendanceService.OnNotify += StateHasChanged;
+    }
+}

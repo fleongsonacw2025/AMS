@@ -1,0 +1,121 @@
+@page "/attendance-dashboard"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3>Real-Time Attendance Dashboard</h3>
+            <button class="btn btn-outline-secondary btn-sm mt-1" @onclick='() => Nav.NavigateTo("/punchclock")'>
+                ← Back to Menu
+            </button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success p-2">
+                <i class="bi bi-broadcast"></i> Live Updates
+            </span>
+            <button class="btn btn-outline-primary btn-sm" @onclick="RefreshDashboard">
+                Refresh Now
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Working Count Card -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-primary text-white shadow-sm">
+                <div class="card-body">
+                    <h6 class="card-title text-uppercase fw-bold">Active Staff Clocked In</h6>
+                    <h2 class="display-5 fw-bold mb-0">@(activeEmployees?.Count ?? 0)</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Employees List -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between align-items-center">
+            <span>Currently On Site</span>
+            <small class="fw-normal text-light">Auto-refreshes every 30 seconds</small>
+        </div>
+        <div class="card-body p-0">
+            @if (activeEmployees == null)
+            {
+                <p class="p-3 text-muted">Loading active employee statuses...</p>
+            }
+            else if (activeEmployees.Count == 0)
+            {
+                <p class="p-3 text-muted mb-0">No employees are currently clocked in.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Employee Name</th>
+                                <th>Assigned Site</th>
+                                <th>Clocked In At</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var emp in activeEmployees)
+                            {
+                                <tr>
+                                    <td class="fw-bold">@emp.Name</td>
+                                    <td>@emp.SiteName</td>
+                                    <td>@emp.ClockedInAt</td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            Working
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ActiveEmployee>? activeEmployees;
+    private System.Threading.Timer? timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        await RefreshDashboard();
+
+        // Setup 30-second auto-refresh timer
+        timer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await RefreshDashboard();
+                StateHasChanged();
+            });
+        }, null, 30000, 30000);
+    }
+
+    private async Task RefreshDashboard()
+    {
+        activeEmployees = await AttendanceService.GetActiveEmployees();
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}

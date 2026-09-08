@@ -1,0 +1,124 @@
+@page "/user-management"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3>User Management</h3>
+            <p class="text-muted mb-0">Manage system user profiles, permissions, and roles.</p>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/user-editor/0")'>
+            <span class="bi bi-person-plus-fill me-1"></span> Add New User
+        </button>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email / Contact</th>
+                        <th>Employment</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (users == null || !users.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var u in users)
+                        {
+                            <tr>
+                                <td>@u.Id</td>
+                                <td>
+                                    <div class="fw-bold">@u.FullName</div>
+                                    <small class="text-muted">Start: @u.StartDate.ToString("yyyy-MM-dd")</small>
+                                </td>
+                                <td>
+                                    <div>@u.Email</div>
+                                    <small class="text-muted">@u.PhoneNumber</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">@u.EmploymentType</span>
+                                </td>
+                                <td>
+                                    <span class="badge @GetRoleBadgeClass(u.Role)">@u.Role</span>
+                                </td>
+                                <td>
+                                    @if (u.IsActive)
+                                    {
+                                        <span class="badge bg-success">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(u.Id)">
+                                        Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(u)">
+                                        Delete
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<User> users = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        users = await AttendanceService.GetAllUsers();
+    }
+
+    private void EditUser(int id)
+    {
+        Nav.NavigateTo($"/user-editor/{id}");
+    }
+
+    private async Task DeleteUser(User user)
+    {
+        await AttendanceService.DeleteUser(user.Id);
+        await LoadUsers();
+    }
+
+    private string GetRoleBadgeClass(UserRole role) => role switch
+    {
+        UserRole.SystemAdmin => "bg-dark text-white",
+        UserRole.Admin => "bg-danger",
+        UserRole.Manager => "bg-warning text-dark",
+        UserRole.Supervisor => "bg-primary",
+        _ => "bg-secondary"
+    };
+}

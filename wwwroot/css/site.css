@@ -1,0 +1,31 @@
+/* This is the master container  */
+.page {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* Sidebar styling - stays on the left  */
+.sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background-color: #052767; /* Matches the deep blue in your UI */
+    color: white;
+    z-index: 10;
+}
+
+/* Main area takes up all remaining space on the right  */
+main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    min-width: 0; /* Prevents content from pushing sidebar out */
+}
+
+/* Padding for the @Body content  */
+.content {
+    padding: 2rem;
+    flex-grow: 1;
+}

@@ -1,0 +1,115 @@
+﻿@inherits LayoutComponentBase
+@using AMS.Shared
+@using AMS.Models
+@inject AMS.Services.AttendanceService AttendanceService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<div class="page">
+    @if (AttendanceService.CurrentUser != null)
+    {
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+    }
+
+    <main>
+        @if (AttendanceService.CurrentUser != null)
+        {
+            <div class="top-row px-4 d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="me-2">Logged in as: <strong>@AttendanceService.CurrentUser.FullName</strong></span>
+                    <span class="badge bg-secondary">@AttendanceService.CurrentUser.Role</span>
+                </div>
+
+                <div class="d-flex align-items-center gap-3">
+                    <!-- Notification Bell Dropdown -->
+                    <div class="dropdown">
+                        <button class="btn btn-light position-relative dropdown-toggle" type="button" id="notifDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell-fill fs-5"></i>
+                            @if (notifications != null && notifications.Count > 0)
+                            {
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                    @notifications.Count
+                                </span>
+                            }
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow p-2" style="width: 300px; max-height: 400px; overflow-y: auto;" aria-labelledby="notifDropdown">
+                            <li class="dropdown-header fw-bold text-dark border-bottom pb-2">Notifications</li>
+                            @if (notifications == null || notifications.Count == 0)
+                            {
+                                <li class="text-muted text-center py-3">No new notifications</li>
+                            }
+                            else
+                            {
+                                @foreach (var item in notifications)
+                                {
+                                    <li class="mb-2">
+                                        <div class="p-2 bg-light rounded cursor-pointer" @onclick="() => HandleNotificationClick(item)">
+                                            <div class="fw-bold fs-6">@item.Title</div>
+                                            <div class="small text-secondary">@item.Message</div>
+                                            <div class="text-end text-muted" style="font-size: 0.75rem;">@item.CreatedAt.ToString("g")</div>
+                                        </div>
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+
+                    <button class="btn btn-outline-danger btn-sm" @onclick="Logout">Logout</button>
+                </div>
+            </div>
+        }
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private List<NotificationItem> notifications = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        AttendanceService.OnNotify += RefreshLayout;
+        await LoadNotifications();
+    }
+
+    private async Task LoadNotifications()
+    {
+        if (AttendanceService.CurrentUser != null)
+        {
+            notifications = await AttendanceService.GetUserNotifications();
+        }
+    }
+
+    private async void RefreshLayout()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadNotifications();
+            StateHasChanged();
+        });
+    }
+
+    private async Task HandleNotificationClick(NotificationItem item)
+    {
+        await AttendanceService.MarkNotificationAsRead(item.Id);
+        if (!string.IsNullOrEmpty(item.Url))
+        {
+            Navigation.NavigateTo(item.Url);
+        }
+    }
+
+    private void Logout()
+    {
+        AttendanceService.Logout();
+        Navigation.NavigateTo("/login");
+    }
+
+    public void Dispose()
+    {
+        AttendanceService.OnNotify -= RefreshLayout;
+    }
+}
