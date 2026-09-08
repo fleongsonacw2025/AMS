@@ -1,0 +1,35 @@
+@page "/exceptions"
+@using AMS.Services
+@inject AttendanceService AttendanceService
+
+<div class="container mt-4">
+    <h3>Exception Report</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Site</th>
+                <th>Issue</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var ex in exceptions)
+            {
+                <tr>
+                    <td>@ex.EmployeeName</td>
+                    <td>@ex.SiteName</td>
+                    <td><span class="badge bg-danger">@ex.Issue</span></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    private List<ExceptionEntry> exceptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        exceptions = await AttendanceService.GetExceptionReport();
+    }
+}

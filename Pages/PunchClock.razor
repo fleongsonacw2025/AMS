@@ -1,0 +1,168 @@
+@page "/punchclock"
+@using AMS.Models
+@inject AMS.Services.AttendanceService AttendanceService
+@inject IJSRuntime JS
+
+<div class="container text-center mt-5">
+    <h3>Attendance Portal</h3>
+    <hr />
+
+    @if (AttendanceService.CurrentUser == null)
+    {
+        <div class="alert alert-warning">Please log in to record attendance.</div>
+    }
+    else
+    {
+        <div class="card shadow-sm p-4 mx-auto" style="max-width: 400px;">
+            <p><strong>Employee:</strong> @AttendanceService.CurrentUser.FullName</p>
+
+            <div class="form-group mb-4">
+                <label class="form-label">Select Work Site</label>
+                <select class="form-select" @bind="selectedSiteId" disabled="@isPunchedIn">
+                    @foreach (var site in sites)
+                    {
+                        <option value="@site.Id">@site.Name</option>
+                    }
+                </select>
+            </div>
+
+            @if (isPunchedIn)
+            {
+                <div class="alert alert-success">Status: Currently Punched In</div>
+
+                @if (activeBreak != null)
+                {
+                    <div class="alert alert-warning">Status: On Break since @activeBreak.BreakStart.ToShortTimeString()</div>
+                    <button class="btn btn-warning btn-lg w-100 mb-2" @onclick="HandleEndBreak">End Break</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-warning btn-lg w-100 mb-2" @onclick="HandleStartBreak">Start Break</button>
+                    <button class="btn btn-danger btn-lg w-100" @onclick="() => HandlePunch(false)">Punch Out</button>
+                }
+            }
+            else
+            {
+                <div class="alert alert-secondary">Status: Punched Out</div>
+                <button class="btn btn-success btn-lg w-100" @onclick="() => HandlePunch(true)">Punch In</button>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="text-danger mt-3">@errorMessage</div>
+            }
+        </div>
+
+        <div class="mt-5">
+            <h5>Today's History</h5>
+            <table class="table mt-3">
+                <thead>
+                    <tr><th>Time</th><th>Site</th><th>Type</th><th>Flagged</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var record in todayRecords)
+                    {
+                        <tr>
+                            <td>@record.PunchTime.ToShortTimeString()</td>
+                            <td>@record.Site?.Name</td>
+                            <td>@(record.IsPunchIn ? "In" : "Out")</td>
+                            <td>
+                                @if (record.IsFlagged)
+                                {
+                                    <span class="badge bg-warning text-dark" title="@record.FlagReason">Flagged</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">OK</span>
+                                }
+                            </td>
+                            <td><a href="/correct-punch/@record.Id" class="btn btn-sm btn-outline-primary">Correct</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<script>
+    window.getCoordinates = () => {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve(null);
+            } else {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                    (err) => resolve(null)
+                );
+            }
+        });
+    };
+</script>
+
+@code {
+    private List<Site> sites = new();
+    private List<PunchRecord> todayRecords = new();
+    private BreakRecord? activeBreak;
+    private int selectedSiteId;
+    private bool isPunchedIn;
+    private string errorMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        sites = await AttendanceService.GetSites();
+        if (sites.Any()) selectedSiteId = sites.First().Id;
+        await RefreshData();
+    }
+
+    private async Task RefreshData()
+    {
+        todayRecords = await AttendanceService.GetUserTodayRecords();
+        activeBreak = await AttendanceService.GetActiveBreak();
+        isPunchedIn = todayRecords.FirstOrDefault()?.IsPunchIn ?? false;
+    }
+
+    private async Task HandlePunch(bool punchIn)
+    {
+        errorMessage = "";
+        
+        // JS Interop to capture client GPS coordinates
+        var location = await JS.InvokeAsync<GeoLocation>("getCoordinates");
+
+        bool success = await AttendanceService.RecordPunch(
+            selectedSiteId, 
+            punchIn, 
+            location?.Latitude, 
+            location?.Longitude
+        );
+
+        if (success) await RefreshData();
+        else errorMessage = "Failed to record punch.";
+    }
+
+    private async Task HandleStartBreak()
+    {
+        var lastPunch = todayRecords.FirstOrDefault(r => r.IsPunchIn);
+        if (lastPunch != null)
+        {
+            await AttendanceService.StartBreak(lastPunch.Id);
+            await RefreshData();
+        }
+    }
+
+    private async Task HandleEndBreak()
+    {
+        var lastPunch = todayRecords.FirstOrDefault(r => r.IsPunchIn);
+        if (lastPunch != null)
+        {
+            await AttendanceService.EndBreak(lastPunch.Id);
+            await RefreshData();
+        }
+    }
+
+    private class GeoLocation
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+    }
+}

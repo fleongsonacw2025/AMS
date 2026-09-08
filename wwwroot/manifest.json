@@ -1,0 +1,11 @@
+{
+  "name": "ACW Attendance",
+  "short_name": "AMS",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#052c65",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

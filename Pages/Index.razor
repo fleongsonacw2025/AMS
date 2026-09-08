@@ -1,0 +1,42 @@
+﻿@page "/"
+@inject AMS.Services.AttendanceService AttendanceService
+
+<style>
+    body {
+        /* This enables the tiling effect */
+        background-image: url('/images/wallpaper.jpg') !important;
+        background-repeat: repeat !important;
+        background-size: auto !important;
+        background-attachment: scroll !important;
+    }
+
+    /* Keeps the layout clean and minimalist by removing background colors */
+    .page, main, .content {
+        background-color: transparent !important;
+    }
+
+    .welcome-screen {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+</style>
+<div class="welcome-screen text-center">
+    <div class="p-5">
+        @* Adjusted logo size for a cleaner look with the tiled background *@
+        <img src="/images/logornd.png" alt="ACW Logo" class="img-fluid mb-4" style="max-height: 100px;" /> 
+        
+        <h1 class="display-4 text-primary">Welcome to ACW</h1> 
+        <p class="lead">A Cleaner World</p> 
+        
+        @if (AttendanceService.CurrentUser == null) 
+        {
+            <div class="d-inline-block px-5">
+                <p class="mb-3">Please sign in to start your shift.</p> 
+                <a href="login" class="btn btn-primary btn-lg">LOG IN</a> 
+            </div>
+        }
+    </div>
+</div>

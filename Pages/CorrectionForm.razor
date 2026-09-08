@@ -1,0 +1,34 @@
+@page "/correct-punch/{PunchId:int}"
+@using AMS.Models
+@inject AMS.Services.AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <h3>Request Punch Correction</h3>
+    <div class="card p-4 shadow-sm" style="max-width: 500px;">
+        <div class="mb-3">
+            <label class="form-label">Corrected Time</label>
+            <input type="datetime-local" class="form-control" @bind="newTime" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Reason for Correction</label>
+            <textarea class="form-control" rows="3" @bind="reason" placeholder="e.g. Forgot to punch out"></textarea>
+        </div>
+        <button class="btn btn-primary" @onclick="Submit">Submit Request</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int PunchId { get; set; }
+    private DateTime newTime = DateTime.Now;
+    private string reason = "";
+
+    private async Task Submit()
+    {
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            await AttendanceService.SubmitCorrection(PunchId, newTime, reason);
+            Nav.NavigateTo("/punchclock");
+        }
+    }
+}

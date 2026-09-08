@@ -1,0 +1,79 @@
+@page "/login"
+@implements IDisposable
+@inject AMS.Services.AttendanceService AttendanceService
+@inject NavigationManager Navigation
+
+<div class="container text-center mt-4">
+    <!-- Live Date and Digital Clock Display -->
+    <div class="mb-4">
+        <h4 class="text-secondary mb-1">@currentDate</h4>
+        <h1 class="display-4 fw-bold text-primary">@currentTime</h1>
+    </div>
+
+    <!-- Login Card -->
+    <div class="card shadow-lg mx-auto" style="max-width: 400px; border-radius: 8px; overflow: hidden;">
+        <div class="card-header bg-primary text-white py-3">
+            <h3 class="m-0 fw-normal">AMS Login</h3>
+        </div>
+        <div class="card-body p-4 text-start">
+            <form @onsubmit="HandleLogin">
+                <div class="mb-3">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-control" @bind="loginModel.Email" required />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" @bind="loginModel.Password" required />
+                </div>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="text-danger mb-3">@errorMessage</div>
+                }
+                <button type="submit" class="btn btn-primary w-100 py-2">Sign In</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string errorMessage = "";
+    private string currentDate = DateTime.Now.ToString("dddd, MMMM d, yyyy");
+    private string currentTime = DateTime.Now.ToString("hh:mm:ss tt");
+    private System.Threading.Timer? timer;
+
+    protected override void OnInitialized()
+    {
+        timer = new System.Threading.Timer(_ =>
+        {
+            currentDate = DateTime.Now.ToString("dddd, MMMM d, yyyy");
+            currentTime = DateTime.Now.ToString("hh:mm:ss tt");
+            InvokeAsync(StateHasChanged);
+        }, null, 0, 1000);
+    }
+
+    private async Task HandleLogin()
+    {
+        errorMessage = "";
+        var user = await AttendanceService.Login(loginModel.Email, loginModel.Password);
+        if (user != null)
+        {
+            Navigation.NavigateTo("/punchclock");
+        }
+        else
+        {
+            errorMessage = "Invalid email or password.";
+        }
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+
+    private class LoginModel
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

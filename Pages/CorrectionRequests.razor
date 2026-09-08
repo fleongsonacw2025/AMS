@@ -1,0 +1,94 @@
+@page "/correction-requests"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>Timesheet Correction Requests</h3>
+        <span class="badge bg-secondary p-2">Role: @AttendanceService.CurrentUser?.Role</span>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Employee</th>
+                        <th>Original Time</th>
+                        <th>Requested Time</th>
+                        <th>Reason</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (pendingRequests.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No pending correction requests found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var req in pendingRequests)
+                        {
+                            <tr>
+                                <td class="fw-bold">@(req.OriginalRecord?.User?.FullName ?? "Unknown")</td>
+                                <td>@(req.OriginalRecord?.PunchTime.ToString("yyyy-MM-dd hh:mm tt") ?? "N/A")</td>
+                                <td class="text-primary fw-bold">@req.RequestedTime.ToString("yyyy-MM-dd hh:mm tt")</td>
+                                <td>@req.Reason</td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">@req.Status</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-success me-1" @onclick="() => ProcessRequest(req, RequestStatus.Approved)">
+                                        Approve
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ProcessRequest(req, RequestStatus.Rejected)">
+                                        Reject
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<CorrectionRequest> pendingRequests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        await LoadRequests();
+    }
+
+    private async Task LoadRequests()
+    {
+        pendingRequests = await AttendanceService.GetPendingCorrections();
+    }
+
+    private async Task ProcessRequest(CorrectionRequest request, RequestStatus newStatus)
+    {
+        if (newStatus == RequestStatus.Approved && request.OriginalRecord != null)
+        {
+            request.OriginalRecord.PunchTime = request.RequestedTime;
+            request.OriginalRecord.IsFlagged = false;
+            request.OriginalRecord.FlagReason = "Corrected & Approved by Manager";
+            await AttendanceService.SavePunchRecord(request.OriginalRecord);
+        }
+
+        await AttendanceService.UpdateCorrectionStatus(request, newStatus);
+        await LoadRequests();
+    }
+}

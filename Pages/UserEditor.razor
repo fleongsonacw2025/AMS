@@ -1,0 +1,127 @@
+@page "/user-editor/{UserId:int}"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+<div class="container mt-4">
+    <div class="card shadow-sm mx-auto" style="max-width: 600px;">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">@(UserId == 0 ? "Add New User" : "Edit User")</h4>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Full Name</label>
+                <input class="form-control" @bind="user.FullName" placeholder="Full Name" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Email Address</label>
+                <input type="email" class="form-control" @bind="user.Email" placeholder="email@example.com" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Contact Number</label>
+                <input type="tel" class="form-control" @bind="user.PhoneNumber" placeholder="Contact Number" />
+            </div>
+
+            <!-- Phase 2: Emergency Contact -->
+            <div class="mb-3">
+                <label class="form-label fw-bold">Emergency Contact</label>
+                <input class="form-control" @bind="user.EmergencyContact" placeholder="Name & Phone Number" />
+            </div>
+
+            <!-- Phase 2: Employment Type -->
+            <div class="mb-3">
+                <label class="form-label fw-bold">Employment Type</label>
+                <select class="form-select" @bind="user.EmploymentType">
+                    <option value="@EmploymentType.FullTime">Full-Time</option>
+                    <option value="@EmploymentType.PartTime">Part-Time</option>
+                    <option value="@EmploymentType.Casual">Casual</option>
+                    <option value="@EmploymentType.Contractor">Contractor</option>
+                </select>
+            </div>
+
+            <!-- Phase 2: Start Date -->
+            <div class="mb-3">
+                <label class="form-label fw-bold">Start Date</label>
+                <input type="date" class="form-control" @bind="user.StartDate" />
+            </div>
+
+            <!-- Phase 2: Admin-Only Restricted Hourly Pay Rate -->
+            @if (IsAdmin)
+            {
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-danger">Hourly Pay Rate ($)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="user.HourlyPayRate" placeholder="0.00" />
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Password</label>
+                <input type="password" class="form-control" @bind="user.Password" placeholder="Password" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">User Role</label>
+                <select class="form-select" @bind="user.Role">
+                    <option value="@UserRole.Cleaner">Cleaner</option>
+                    <option value="@UserRole.Supervisor">Supervisor</option>
+                    <option value="@UserRole.Manager">Manager</option>
+                    <option value="@UserRole.Admin">Admin</option>
+                    <option value="@UserRole.SystemAdmin">System Admin</option>
+                </select>
+            </div>
+
+            <div class="mb-3 form-check form-switch">
+                <input type="checkbox" class="form-check-input" @bind="user.IsActive" id="activeSwitch">
+                <label class="form-check-label" for="activeSwitch">Active Account Status</label>
+            </div>
+        </div>
+        <div class="card-footer d-flex gap-2">
+            <button class="btn btn-success flex-grow-1" @onclick="Save">Save User</button>
+            <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/user-management")'>Cancel</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    private User user = new() { IsActive = true, Role = UserRole.Cleaner, StartDate = DateTime.Today };
+
+    private bool IsAdmin => AttendanceService.CurrentUser?.Role == UserRole.Admin || 
+                            AttendanceService.CurrentUser?.Role == UserRole.SystemAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserId != 0)
+        {
+            var users = await AttendanceService.GetAllUsers();
+            user = users.FirstOrDefault(u => u.Id == UserId) ?? new();
+        }
+    }
+
+    private async Task Save()
+    {
+        // Enforce pay rate security backend check
+        if (!IsAdmin)
+        {
+            if (UserId != 0)
+            {
+                var originalUsers = await AttendanceService.GetAllUsers();
+                var originalUser = originalUsers.FirstOrDefault(u => u.Id == UserId);
+                if (originalUser != null)
+                {
+                    user.HourlyPayRate = originalUser.HourlyPayRate;
+                }
+            }
+            else
+            {
+                user.HourlyPayRate = 0;
+            }
+        }
+
+        await AttendanceService.SaveUser(user);
+        Nav.NavigateTo("/user-management");
+    }
+}

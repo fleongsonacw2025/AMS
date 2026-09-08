@@ -1,0 +1,37 @@
+@page "/supervisor/raw-data"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+<div class="container mt-4">
+    <h3>Supervisor Dashboard</h3>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Time</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var punch in allPunches)
+            {
+                <tr>
+                    <td>@punch.User?.FullName</td>
+                    <td>@punch.PunchTime.ToString("g")</td>
+                    <td>@(punch.IsPunchIn ? "In" : "Out")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+   
+    private List<PunchRecord> allPunches = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        allPunches = await AttendanceService.GetAllRawPunches();
+    }
+}
