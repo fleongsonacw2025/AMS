@@ -1,7 +1,10 @@
 @page "/attendance-dashboard"
+@attribute [Authorize(Roles = "Supervisor,Manager,Admin,SystemAdmin")]
 @using AMS.Models
 @using AMS.Services
+@using Microsoft.AspNetCore.Authorization
 @inject AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager Nav
 @implements IDisposable
 
@@ -122,36 +125,69 @@
 @code {
     private List<ActiveEmployee>? employeeStatuses;
     private System.Threading.Timer? timer;
+    private bool timerStarted;
 
     protected override async Task OnInitializedAsync()
     {
-        if (AttendanceService.CurrentUser == null)
+        if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Supervisor)
         {
-            Nav.NavigateTo("/login", forceLoad: true);
+            await RefreshDashboard();
+            EnsureTimerStarted();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
             return;
         }
 
-        if (AttendanceService.CurrentUser.Role < UserRole.Supervisor)
+        if (AttendanceService.CurrentUser == null)
+        {
+            var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+            if (session == null)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+        }
+
+        var currentUser = AttendanceService.CurrentUser;
+        if (currentUser == null || currentUser.Role < UserRole.Supervisor)
         {
             Nav.NavigateTo("/punchclock");
             return;
         }
 
         await RefreshDashboard();
+        EnsureTimerStarted();
+        StateHasChanged();
+    }
 
+    private void EnsureTimerStarted()
+    {
+        if (timerStarted)
+        {
+            return;
+        }
+
+        timerStarted = true;
         timer = new System.Threading.Timer(async _ =>
         {
             await InvokeAsync(async () =>
             {
-                await RefreshDashboard();
-                StateHasChanged();
+                if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Supervisor)
+                {
+                    await RefreshDashboard();
+                    StateHasChanged();
+                }
             });
         }, null, 30000, 30000);
     }
 
     private async Task RefreshDashboard()
     {
-        // Note: We will update GetActiveEmployees() in AttendanceService to return all 5 statuses
         employeeStatuses = await AttendanceService.GetActiveEmployees();
     }
 

@@ -1,8 +1,11 @@
 @page "/leave-management"
+@attribute [Authorize]
 @using AMS.Models
 @using AMS.Services
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @inject AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager Nav
 
 <PageTitle>Leave Management - AMS</PageTitle>
@@ -245,16 +248,35 @@
     private string validationError = "";
     private int selectedBalanceUserId;
     private double updatedBalanceDays = 15.0;
+    private bool dataLoaded;
 
     protected override async Task OnInitializedAsync()
     {
-        if (AttendanceService.CurrentUser == null)
+        if (AttendanceService.CurrentUser != null)
         {
-            Nav.NavigateTo("/login", forceLoad: true);
+            await LoadData();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || dataLoaded)
+        {
             return;
         }
 
+        if (AttendanceService.CurrentUser == null)
+        {
+            var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+            if (session == null)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+        }
+
         await LoadData();
+        StateHasChanged();
     }
 
     private async Task LoadData()
@@ -281,6 +303,8 @@
                 updatedBalanceDays = allUsers.First().LeaveBalanceDays;
             }
         }
+
+        dataLoaded = true;
     }
 
     private async Task HandleSubmit()

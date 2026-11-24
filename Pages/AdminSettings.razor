@@ -1,7 +1,10 @@
 @page "/admin-settings"
+@attribute [Authorize(Roles = "Manager,Admin,SystemAdmin")]
 @using AMS.Models
 @using AMS.Services
+@using Microsoft.AspNetCore.Authorization
 @inject AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager Nav
 
 @if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Manager)
@@ -63,22 +66,44 @@
 @code {
     private List<Site> sites = new();
     private string statusMessage = "";
+    private bool dataLoaded;
 
     protected override async Task OnInitializedAsync()
     {
-        if (AttendanceService.CurrentUser == null)
+        if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Manager)
         {
-            Nav.NavigateTo("/login", forceLoad: true);
+            sites = await AttendanceService.GetSites();
+            dataLoaded = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || dataLoaded)
+        {
             return;
         }
 
-        if (AttendanceService.CurrentUser.Role < UserRole.Manager)
+        if (AttendanceService.CurrentUser == null)
+        {
+            var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+            if (session == null)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+        }
+
+        var currentUser = AttendanceService.CurrentUser;
+        if (currentUser == null || currentUser.Role < UserRole.Manager)
         {
             Nav.NavigateTo("/punchclock");
             return;
         }
 
         sites = await AttendanceService.GetSites();
+        dataLoaded = true;
+        StateHasChanged();
     }
 
     private void AddNewSite()

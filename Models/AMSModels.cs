@@ -1,12 +1,12 @@
 namespace AMS.Models;
 
-public enum UserRole 
-{ 
+public enum UserRole
+{
     Cleaner,
-    Supervisor, 
-    Manager, 
-    Admin, 
-    SystemAdmin 
+    Supervisor,
+    Manager,
+    Admin,
+    SystemAdmin
 }
 
 public enum EmploymentType
@@ -27,21 +27,21 @@ public enum LeaveType
 }
 
 // Helper Classes for Reports/Dashboard
-public class TimesheetEntry 
-{ 
-    public string EmployeeName { get; set; } = string.Empty; 
-    public string Date { get; set; } = string.Empty; 
-    public bool IsPunchIn { get; set; } 
+public class TimesheetEntry
+{
+    public string EmployeeName { get; set; } = string.Empty;
+    public string Date { get; set; } = string.Empty;
+    public bool IsPunchIn { get; set; }
 }
 
-public class ExceptionEntry 
-{ 
-    public string EmployeeName { get; set; } = string.Empty; 
-    public string SiteName { get; set; } = string.Empty; 
-    public string Issue { get; set; } = string.Empty; 
+public class ExceptionEntry
+{
+    public string EmployeeName { get; set; } = string.Empty;
+    public string SiteName { get; set; } = string.Empty;
+    public string Issue { get; set; } = string.Empty;
 }
 
-public class ActiveEmployee 
+public class ActiveEmployee
 {
     public string Name { get; set; } = string.Empty;
     public string SiteName { get; set; } = string.Empty;
@@ -77,7 +77,7 @@ public class User
     public TimeSpan ExpectedStartTime { get; set; } = new TimeSpan(9, 0, 0); // Default 9:00 AM
     public double LeaveBalanceDays { get; set; } = 15.0;
     public int? AssignedSiteId { get; set; }
-    
+
     // Restricted Field
     public decimal HourlyPayRate { get; set; }
 }
@@ -87,7 +87,7 @@ public class Site
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
-    
+
     // GPS Geofencing & Break Policy Fields
     public double Latitude { get; set; }
     public double Longitude { get; set; }
@@ -119,7 +119,7 @@ public class BreakRecord
     public User? User { get; set; }
     public int PunchRecordId { get; set; }
     public PunchRecord? PunchRecord { get; set; }
-    
+
     public DateTime BreakStart { get; set; }
     public DateTime? BreakEnd { get; set; }
     public bool IsExceeded { get; set; }
@@ -164,7 +164,7 @@ public class NotificationItem
     public string? Url { get; set; }
 }
 
-public class AuditLog 
+public class AuditLog
 {
     public int Id { get; set; }
     public string Action { get; set; } = string.Empty;

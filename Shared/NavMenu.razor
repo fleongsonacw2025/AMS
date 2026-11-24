@@ -121,6 +121,18 @@
         AttendanceService.OnNotify += OnServiceNotify;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AttendanceService.CurrentUser == null && AuthStateProvider is SimpleAuthStateProvider customAuth)
+        {
+            var session = await customAuth.RestoreSessionFromStorageAsync();
+            if (session != null)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
     public void Dispose()
     {
         AttendanceService.OnNotify -= OnServiceNotify;

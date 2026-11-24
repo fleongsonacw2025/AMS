@@ -1,7 +1,10 @@
 @page "/timesheet-report"
+@attribute [Authorize(Roles = "Manager,Admin,SystemAdmin")]
 @using AMS.Models
 @using AMS.Services
+@using Microsoft.AspNetCore.Authorization
 @inject AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 
@@ -155,24 +158,49 @@
     private DateTime startDate = DateTime.Today.AddDays(-7);
     private DateTime endDate = DateTime.Today;
     private int selectedSiteId = 0;
+    private bool dataLoaded;
 
     protected override async Task OnInitializedAsync()
     {
-        if (AttendanceService.CurrentUser == null)
+        if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Manager)
         {
-            Nav.NavigateTo("/login", forceLoad: true);
+            await LoadReportDataAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || dataLoaded)
+        {
             return;
         }
 
-        // Block Supervisors and Cleaners from Labour Cost Report
-        if (AttendanceService.CurrentUser.Role < UserRole.Manager)
+        if (AttendanceService.CurrentUser == null)
+        {
+            var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+            if (session == null)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+        }
+
+        var currentUser = AttendanceService.CurrentUser;
+        if (currentUser == null || currentUser.Role < UserRole.Manager)
         {
             Nav.NavigateTo("/punchclock");
             return;
         }
 
+        await LoadReportDataAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadReportDataAsync()
+    {
         sites = await AttendanceService.GetSites();
         await FilterReport();
+        dataLoaded = true;
     }
 
     private async Task FilterReport()
