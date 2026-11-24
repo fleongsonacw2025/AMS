@@ -13,20 +13,9 @@
     <title>AMS</title>
     <base href="~/" />
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link href="css/site.css" rel="stylesheet" />
 </head>
-
-<script>
-    window.downloadFile = (fileName, content) => {
-        const blob = new Blob([content], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = fileName;
-        anchor.click();
-        URL.revokeObjectURL(url);
-    };
-</script>
 
 <body>
     <app>
@@ -44,19 +33,49 @@
         <a class="dismiss">🗙</a>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="_framework/blazor.server.js"></script>
 
     <script>
-    window.AttendanceSync = {
-    saveOfflinePunch: (siteId, isPunchIn) => {
-        const punch = { siteId, isPunchIn, time: new Date().toISOString(), synced: false };
-        localStorage.setItem('pending_punch', JSON.stringify(punch));
-        alert("Offline: Punch saved locally. It will sync when reconnected.");
-    },
-    checkSync: () => {
-        return localStorage.getItem('pending_punch');
-    }
-};
-</script>
+        window.downloadFile = (fileName, content) => {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = fileName;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        };
+
+        window.getCoordinates = () => {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve(null);
+                    return;
+                }
+
+                try {
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+                        () => resolve(null),
+                        { enableHighAccuracy: true, timeout: 8000 }
+                    );
+                } catch {
+                    resolve(null);
+                }
+            });
+        };
+
+        window.AttendanceSync = {
+            saveOfflinePunch: (siteId, isPunchIn) => {
+                const punch = { siteId, isPunchIn, time: new Date().toISOString(), synced: false };
+                localStorage.setItem('pending_punch', JSON.stringify(punch));
+                alert("Offline: Punch saved locally. It will sync when reconnected.");
+            },
+            checkSync: () => {
+                return localStorage.getItem('pending_punch');
+            }
+        };
+    </script>
 </body>
 </html>

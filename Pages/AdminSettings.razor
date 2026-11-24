@@ -1,0 +1,95 @@
+@page "/admin-settings"
+@using AMS.Models
+@using AMS.Services
+@inject AttendanceService AttendanceService
+@inject NavigationManager Nav
+
+@if (AttendanceService.CurrentUser != null && AttendanceService.CurrentUser.Role >= UserRole.Manager)
+{
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h3>Site Geofence &amp; Break Policy Settings</h3>
+                <p class="text-muted mb-0">Configure site GPS coordinates, allowed radius (meters), and max break limits.</p>
+            </div>
+            <button class="btn btn-primary" @onclick="AddNewSite">
+                <i class="bi bi-plus-circle me-1"></i> Add Site
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-success py-2">@statusMessage</div>
+        }
+
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Site Name</th>
+                                <th>Address</th>
+                                <th>Latitude</th>
+                                <th>Longitude</th>
+                                <th>Geofence Radius (m)</th>
+                                <th>Max Break (mins)</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var site in sites)
+                            {
+                                <tr>
+                                    <td><input class="form-control form-control-sm" @bind="site.Name" /></td>
+                                    <td><input class="form-control form-control-sm" @bind="site.Address" /></td>
+                                    <td><input type="number" step="0.000001" class="form-control form-control-sm" @bind="site.Latitude" /></td>
+                                    <td><input type="number" step="0.000001" class="form-control form-control-sm" @bind="site.Longitude" /></td>
+                                    <td><input type="number" step="10" class="form-control form-control-sm" @bind="site.RadiusMeters" /></td>
+                                    <td><input type="number" step="5" class="form-control form-control-sm" @bind="site.MaxBreakMinutes" /></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" @onclick="() => SaveSite(site)">Save</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Site> sites = new();
+    private string statusMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AttendanceService.CurrentUser == null)
+        {
+            Nav.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        if (AttendanceService.CurrentUser.Role < UserRole.Manager)
+        {
+            Nav.NavigateTo("/punchclock");
+            return;
+        }
+
+        sites = await AttendanceService.GetSites();
+    }
+
+    private void AddNewSite()
+    {
+        sites.Add(new Site { Name = "New Site", RadiusMeters = 200, MaxBreakMinutes = 30 });
+    }
+
+    private async Task SaveSite(Site site)
+    {
+        await AttendanceService.SaveSite(site);
+        sites = await AttendanceService.GetSites();
+        statusMessage = $"Saved settings for {site.Name}.";
+    }
+}

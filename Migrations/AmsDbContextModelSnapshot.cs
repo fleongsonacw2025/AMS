@@ -220,6 +220,9 @@ namespace AMS.Migrations
                     b.Property<double>("Longitude")
                         .HasColumnType("REAL");
 
+                    b.Property<double>("MaxBreakMinutes")
+                        .HasColumnType("REAL");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -238,6 +241,7 @@ namespace AMS.Migrations
                             Address = "Sturdee Street, Linden Park, Adelaide, SA 5065",
                             Latitude = -34.942900000000002,
                             Longitude = 138.63839999999999,
+                            MaxBreakMinutes = 30.0,
                             Name = "ACW Head Office",
                             RadiusMeters = 200.0
                         },
@@ -247,6 +251,7 @@ namespace AMS.Migrations
                             Address = "LOCATION TRACKED",
                             Latitude = 0.0,
                             Longitude = 0.0,
+                            MaxBreakMinutes = 30.0,
                             Name = "FIELD",
                             RadiusMeters = 1000.0
                         });
@@ -256,6 +261,9 @@ namespace AMS.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AssignedSiteId")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Email")
@@ -269,6 +277,9 @@ namespace AMS.Migrations
                     b.Property<int>("EmploymentType")
                         .HasColumnType("INTEGER");
 
+                    b.Property<TimeSpan>("ExpectedStartTime")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -278,6 +289,9 @@ namespace AMS.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double>("LeaveBalanceDays")
+                        .HasColumnType("REAL");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -311,14 +325,16 @@ namespace AMS.Migrations
                             Email = "admin@ams.com",
                             EmergencyContact = "",
                             EmploymentType = 2,
+                            ExpectedStartTime = new TimeSpan(0, 9, 0, 0, 0),
                             FullName = "Tech Admin",
                             HourlyPayRate = 0m,
                             IsActive = true,
+                            LeaveBalanceDays = 15.0,
                             Name = "TECH",
                             Password = "password123",
                             PhoneNumber = "09157337337",
                             Role = 3,
-                            StartDate = new DateTime(2026, 9, 7, 0, 0, 0, 0, DateTimeKind.Local)
+                            StartDate = new DateTime(2026, 11, 24, 0, 0, 0, 0, DateTimeKind.Local)
                         });
                 });
 

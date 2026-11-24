@@ -46,6 +46,7 @@ public class ActiveEmployee
     public string Name { get; set; } = string.Empty;
     public string SiteName { get; set; } = string.Empty;
     public string ClockedInAt { get; set; } = string.Empty;
+    public string Status { get; set; } = "Not Yet Clocked In";
 }
 
 public class LaborCostReportItem
@@ -65,7 +66,7 @@ public class User
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty; // Stored as PBKDF2 hash
     public UserRole Role { get; set; }
     public bool IsActive { get; set; } = true;
 
@@ -73,6 +74,9 @@ public class User
     public string EmergencyContact { get; set; } = string.Empty;
     public EmploymentType EmploymentType { get; set; } = EmploymentType.Casual;
     public DateTime StartDate { get; set; } = DateTime.Today;
+    public TimeSpan ExpectedStartTime { get; set; } = new TimeSpan(9, 0, 0); // Default 9:00 AM
+    public double LeaveBalanceDays { get; set; } = 15.0;
+    public int? AssignedSiteId { get; set; }
     
     // Restricted Field
     public decimal HourlyPayRate { get; set; }
@@ -84,10 +88,11 @@ public class Site
     public string Name { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
     
-    // GPS Geofencing Fields
+    // GPS Geofencing & Break Policy Fields
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public double RadiusMeters { get; set; } = 200.0;
+    public double MaxBreakMinutes { get; set; } = 30.0;
 }
 
 public class PunchRecord

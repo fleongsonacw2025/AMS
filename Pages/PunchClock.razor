@@ -1,18 +1,18 @@
 @page "/punchclock"
+@attribute [Authorize]
 @using AMS.Models
+@using Microsoft.AspNetCore.Authorization
 @inject AMS.Services.AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
+@inject NavigationManager Nav
 @inject IJSRuntime JS
 
-<div class="container text-center mt-5">
-    <h3>Attendance Portal</h3>
-    <hr />
+@if (AttendanceService.CurrentUser != null)
+{
+    <div class="container text-center mt-5">
+        <h3>Attendance Portal</h3>
+        <hr />
 
-    @if (AttendanceService.CurrentUser == null)
-    {
-        <div class="alert alert-warning">Please log in to record attendance.</div>
-    }
-    else
-    {
         <div class="card shadow-sm p-4 mx-auto" style="max-width: 400px;">
             <p><strong>Employee:</strong> @AttendanceService.CurrentUser.FullName</p>
 
@@ -57,7 +57,7 @@
             <h5>Today's History</h5>
             <table class="table mt-3">
                 <thead>
-                    <tr><th>Time</th><th>Site</th><th>Type</th><th>Flagged</th><th>Action</th></tr>
+                    <tr><th>Time</th><th>Site</th><th>Type</th><th>Status</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var record in todayRecords)
@@ -69,7 +69,9 @@
                             <td>
                                 @if (record.IsFlagged)
                                 {
-                                    <span class="badge bg-warning text-dark" title="@record.FlagReason">Flagged</span>
+                                    <span class="badge bg-warning text-dark" title="@record.FlagReason">
+                                        ⚠️ @(record.FlagReason ?? "Flagged")
+                                    </span>
                                 }
                                 else
                                 {
@@ -82,23 +84,8 @@
                 </tbody>
             </table>
         </div>
-    }
-</div>
-
-<script>
-    window.getCoordinates = () => {
-        return new Promise((resolve) => {
-            if (!navigator.geolocation) {
-                resolve(null);
-            } else {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-                    (err) => resolve(null)
-                );
-            }
-        });
-    };
-</script>
+    </div>
+}
 
 @code {
     private List<Site> sites = new();
@@ -110,8 +97,41 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (AttendanceService.CurrentUser != null)
+        {
+            await LoadPortalDataAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        if (AttendanceService.CurrentUser == null)
+        {
+            var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+            if (session == null)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+        }
+
+        await LoadPortalDataAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadPortalDataAsync()
+    {
         sites = await AttendanceService.GetSites();
-        if (sites.Any()) selectedSiteId = sites.First().Id;
+        if (sites.Any() && selectedSiteId == 0)
+        {
+            selectedSiteId = sites.First().Id;
+        }
+
         await RefreshData();
     }
 
@@ -125,14 +145,21 @@
     private async Task HandlePunch(bool punchIn)
     {
         errorMessage = "";
-        
-        // JS Interop to capture client GPS coordinates
-        var location = await JS.InvokeAsync<GeoLocation>("getCoordinates");
+        GeoLocation? location = null;
+
+        try
+        {
+            location = await JS.InvokeAsync<GeoLocation?>("getCoordinates");
+        }
+        catch
+        {
+            location = null;
+        }
 
         bool success = await AttendanceService.RecordPunch(
-            selectedSiteId, 
-            punchIn, 
-            location?.Latitude, 
+            selectedSiteId,
+            punchIn,
+            location?.Latitude,
             location?.Longitude
         );
 
@@ -142,20 +169,24 @@
 
     private async Task HandleStartBreak()
     {
-        var lastPunch = todayRecords.FirstOrDefault(r => r.IsPunchIn);
-        if (lastPunch != null)
+        errorMessage = "";
+        var latestPunch = todayRecords.FirstOrDefault();
+        if (latestPunch != null && latestPunch.IsPunchIn)
         {
-            await AttendanceService.StartBreak(lastPunch.Id);
+            bool started = await AttendanceService.StartBreak(latestPunch.Id);
+            if (!started) errorMessage = "Unable to start break.";
             await RefreshData();
         }
     }
 
     private async Task HandleEndBreak()
     {
-        var lastPunch = todayRecords.FirstOrDefault(r => r.IsPunchIn);
-        if (lastPunch != null)
+        errorMessage = "";
+        var latestPunch = todayRecords.FirstOrDefault();
+        if (latestPunch != null)
         {
-            await AttendanceService.EndBreak(lastPunch.Id);
+            bool ended = await AttendanceService.EndBreak(latestPunch.Id);
+            if (!ended) errorMessage = "Unable to end break.";
             await RefreshData();
         }
     }

@@ -1,22 +1,26 @@
-using Microsoft.EntityFrameworkCore;
+using AMS;
 using AMS.Data;
 using AMS.Services;
-using Microsoft.AspNetCore.Components.Authorization; // Added for Auth
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-// 1. Register Auth Services
+// 1. Register Auth & Protected Storage Services
 builder.Services.AddAuthenticationCore();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<ProtectedSessionStorage>();
 
-// 2. Register your Custom State Provider (ensure the file exists)
-builder.Services.AddScoped<AuthenticationStateProvider, SimpleAuthStateProvider>();
+// 2. Register Custom AuthenticationStateProvider (and expose concrete type for direct updates)
+builder.Services.AddScoped<SimpleAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<SimpleAuthStateProvider>());
 
-// Register the Database Context
+// 3. Register Database Context & Application Services
 builder.Services.AddDbContext<AmsDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=ams.db"));
 
@@ -24,17 +28,17 @@ builder.Services.AddScoped<AttendanceService>();
 
 var app = builder.Build();
 
-// Ensure the database file is created locally[cite: 6]
+// Apply pending EF Core migrations on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AmsDbContext>();
-    db.Database.EnsureCreated();
+    db.Database.Migrate();
 }
 
 app.UseStaticFiles();
 app.UseRouting();
 
-// 3. Add Auth Middleware (Must be between UseRouting and MapBlazorHub)
+// 4. Add Auth Middleware between UseRouting and MapBlazorHub
 app.UseAuthentication();
 app.UseAuthorization();
 

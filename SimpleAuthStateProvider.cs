@@ -1,58 +1,115 @@
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using System.Security.Claims;
 using AMS.Models;
+using AMS.Services;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+
+namespace AMS;
+
+public class UserSessionData
+{
+    public int Id { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public UserRole Role { get; set; }
+}
 
 public class SimpleAuthStateProvider : AuthenticationStateProvider
 {
     private readonly ProtectedSessionStorage _sessionStorage;
-    private ClaimsPrincipal _anonymous = new ClaimsPrincipal(new ClaimsIdentity());
+    private readonly AttendanceService _attendanceService;
+    private readonly ClaimsPrincipal _anonymous = new(new ClaimsIdentity());
+    private UserSessionData? _currentSession;
 
-    public SimpleAuthStateProvider(ProtectedSessionStorage sessionStorage)
+    public SimpleAuthStateProvider(ProtectedSessionStorage sessionStorage, AttendanceService attendanceService)
     {
         _sessionStorage = sessionStorage;
+        _attendanceService = attendanceService;
     }
 
-    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
+    public UserSessionData? CurrentSession => _currentSession;
+
+    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    {
+        var principal = _currentSession != null ? BuildPrincipal(_currentSession) : _anonymous;
+        return Task.FromResult(new AuthenticationState(principal));
+    }
+
+    public async Task<UserSessionData?> RestoreSessionFromStorageAsync()
     {
         try
         {
-            var userSessionStorageResult = await _sessionStorage.GetAsync<User>("UserSession");
-            var userSession = userSessionStorageResult.Success ? userSessionStorageResult.Value : null;
-
-            if (userSession == null)
-                return await Task.FromResult(new AuthenticationState(_anonymous));
-
-            var claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new List<Claim>
+            var result = await _sessionStorage.GetAsync<UserSessionData>("UserSession");
+            if (result.Success && result.Value != null)
             {
-                new Claim(ClaimTypes.Name, userSession.Email),
-                new Claim(ClaimTypes.Role, userSession.Role.ToString())
-            }, "CustomAuth"));
+                _currentSession = result.Value;
+                await _attendanceService.RestoreSessionAsync(_currentSession.Id);
 
-            return await Task.FromResult(new AuthenticationState(claimsPrincipal));
+                if (_attendanceService.CurrentUser == null)
+                {
+                    _currentSession = null;
+                    await _sessionStorage.DeleteAsync("UserSession");
+                    NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_anonymous)));
+                    return null;
+                }
+
+                NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(BuildPrincipal(_currentSession))));
+                return _currentSession;
+            }
         }
-        catch { return await Task.FromResult(new AuthenticationState(_anonymous)); }
+        catch (InvalidOperationException)
+        {
+            // ProtectedSessionStorage / JS interop not ready during prerendering
+        }
+        catch
+        {
+            // Treat unreadable storage as unauthenticated
+        }
+
+        _currentSession = null;
+        return null;
     }
 
-    public async Task UpdateAuthenticationState(User? userSession)
+    public async Task UpdateAuthenticationState(User? user)
     {
         ClaimsPrincipal claimsPrincipal;
 
-        if (userSession != null)
+        if (user != null)
         {
-            await _sessionStorage.SetAsync("UserSession", userSession);
-            claimsPrincipal = new ClaimsPrincipal(new ClaimsIdentity(new List<Claim>
+            var sessionData = new UserSessionData
             {
-                new Claim(ClaimTypes.Name, userSession.Email),
-                new Claim(ClaimTypes.Role, userSession.Role.ToString())
-            }, "CustomAuth"));
+                Id = user.Id,
+                Email = user.Email,
+                FullName = user.FullName,
+                Role = user.Role
+            };
+
+            _currentSession = sessionData;
+            await _attendanceService.RestoreSessionAsync(user.Id);
+            await _sessionStorage.SetAsync("UserSession", sessionData);
+            claimsPrincipal = BuildPrincipal(sessionData);
         }
         else
         {
+            _currentSession = null;
+            _attendanceService.Logout();
             await _sessionStorage.DeleteAsync("UserSession");
             claimsPrincipal = _anonymous;
         }
 
         NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(claimsPrincipal)));
+    }
+
+    private static ClaimsPrincipal BuildPrincipal(UserSessionData session)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, session.Id.ToString()),
+            new(ClaimTypes.Name, session.Email),
+            new(ClaimTypes.GivenName, session.FullName),
+            new(ClaimTypes.Role, session.Role.ToString())
+        };
+
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "CustomAuth"));
     }
 }

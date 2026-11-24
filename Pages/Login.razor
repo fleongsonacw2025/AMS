@@ -1,6 +1,8 @@
 @page "/login"
 @implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
 @inject AMS.Services.AttendanceService AttendanceService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <div class="container text-center mt-4">
@@ -29,7 +31,9 @@
                 {
                     <div class="text-danger mb-3">@errorMessage</div>
                 }
-                <button type="submit" class="btn btn-primary w-100 py-2">Sign In</button>
+                <button type="submit" class="btn btn-primary w-100 py-2" disabled="@isSubmitting">
+                    @(isSubmitting ? "Signing In..." : "Sign In")
+                </button>
             </form>
         </div>
     </div>
@@ -38,6 +42,7 @@
 @code {
     private LoginModel loginModel = new();
     private string errorMessage = "";
+    private bool isSubmitting;
     private string currentDate = DateTime.Now.ToString("dddd, MMMM d, yyyy");
     private string currentTime = DateTime.Now.ToString("hh:mm:ss tt");
     private System.Threading.Timer? timer;
@@ -54,15 +59,30 @@
 
     private async Task HandleLogin()
     {
+        if (isSubmitting) return;
+        isSubmitting = true;
         errorMessage = "";
-        var user = await AttendanceService.Login(loginModel.Email, loginModel.Password);
-        if (user != null)
+
+        try
         {
-            Navigation.NavigateTo("/punchclock");
+            var user = await AttendanceService.Login(loginModel.Email.Trim(), loginModel.Password);
+            if (user != null)
+            {
+                if (AuthStateProvider is SimpleAuthStateProvider customAuth)
+                {
+                    await customAuth.UpdateAuthenticationState(user);
+                }
+
+                Navigation.NavigateTo("/punchclock");
+            }
+            else
+            {
+                errorMessage = "Invalid email or password.";
+            }
         }
-        else
+        finally
         {
-            errorMessage = "Invalid email or password.";
+            isSubmitting = false;
         }
     }
 

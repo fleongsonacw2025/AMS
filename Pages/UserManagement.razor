@@ -1,105 +1,188 @@
 @page "/user-management"
+@attribute [Authorize(Roles = "Admin,SystemAdmin")]
+@using System.Security.Claims
 @using AMS.Models
 @using AMS.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @inject AttendanceService AttendanceService
+@inject SimpleAuthStateProvider AuthStateProvider
 @inject NavigationManager Nav
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h3>User Management</h3>
-            <p class="text-muted mb-0">Manage system user profiles, permissions, and roles.</p>
-        </div>
-        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/user-editor/0")'>
-            <span class="bi bi-person-plus-fill me-1"></span> Add New User
-        </button>
-    </div>
+<AuthorizeView Roles="Admin,SystemAdmin">
+    <Authorized Context="authState">
+        <div class="container mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h3>User Management</h3>
+                    <p class="text-muted mb-0">Manage system user profiles, permissions, and roles.</p>
+                </div>
+                <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/user-editor/0")'>
+                    <span class="bi bi-person-plus-fill me-1"></span> Add New User
+                </button>
+            </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body p-0">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-dark">
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Email / Contact</th>
-                        <th>Employment</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th class="text-end pe-4">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (users == null || !users.Any())
-                    {
-                        <tr>
-                            <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
-                        </tr>
-                    }
-                    else
-                    {
-                        @foreach (var u in users)
-                        {
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert">@errorMessage</div>
+            }
+
+            <div class="card shadow-sm">
+                <div class="card-body p-0">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-dark">
                             <tr>
-                                <td>@u.Id</td>
-                                <td>
-                                    <div class="fw-bold">@u.FullName</div>
-                                    <small class="text-muted">Start: @u.StartDate.ToString("yyyy-MM-dd")</small>
-                                </td>
-                                <td>
-                                    <div>@u.Email</div>
-                                    <small class="text-muted">@u.PhoneNumber</small>
-                                </td>
-                                <td>
-                                    <span class="badge bg-light text-dark border">@u.EmploymentType</span>
-                                </td>
-                                <td>
-                                    <span class="badge @GetRoleBadgeClass(u.Role)">@u.Role</span>
-                                </td>
-                                <td>
-                                    @if (u.IsActive)
-                                    {
-                                        <span class="badge bg-success">Active</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-secondary">Inactive</span>
-                                    }
-                                </td>
-                                <td class="text-end pe-4">
-                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(u.Id)">
-                                        Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(u)">
-                                        Delete
-                                    </button>
-                                </td>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email / Contact</th>
+                                <th>Employment</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th class="text-end pe-4">Actions</th>
                             </tr>
-                        }
-                    }
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                            @if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">Loading users...</td>
+                                </tr>
+                            }
+                            else if (users == null || !users.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var u in users)
+                                {
+                                    <tr>
+                                        <td>@u.Id</td>
+                                        <td>
+                                            <div class="fw-bold">@u.FullName</div>
+                                            <small class="text-muted">Start: @u.StartDate.ToString("yyyy-MM-dd")</small>
+                                        </td>
+                                        <td>
+                                            <div>@u.Email</div>
+                                            <small class="text-muted">@u.PhoneNumber</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark border">@u.EmploymentType</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetRoleBadgeClass(u.Role)">@u.Role</span>
+                                        </td>
+                                        <td>
+                                            @if (u.IsActive)
+                                            {
+                                                <span class="badge bg-success">Active</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            }
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditUser(u.Id)">
+                                                Edit
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteUser(u)">
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="container mt-4">
+            <div class="alert alert-warning" role="alert">
+                You are not authorized to view User Management.
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
     private List<User> users = new();
+    private bool isLoading = true;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        if (AttendanceService.CurrentUser?.Role < UserRole.Supervisor)
+        var authState = AuthenticationStateTask != null
+            ? await AuthenticationStateTask
+            : await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (IsAuthorizedAdmin(authState.User))
+        {
+            await LoadUsers();
+        }
+        else
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var session = await AuthStateProvider.RestoreSessionFromStorageAsync();
+        if (session == null)
+        {
+            Nav.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
+        if (session.Role != UserRole.Admin && session.Role != UserRole.SystemAdmin)
         {
             Nav.NavigateTo("/punchclock");
             return;
         }
 
-        await LoadUsers();
+        if (!users.Any())
+        {
+            await LoadUsers();
+            StateHasChanged();
+        }
+    }
+
+    private static bool IsAuthorizedAdmin(ClaimsPrincipal user)
+    {
+        return user.Identity?.IsAuthenticated == true
+            && (user.IsInRole(UserRole.Admin.ToString()) || user.IsInRole(UserRole.SystemAdmin.ToString()));
     }
 
     private async Task LoadUsers()
     {
-        users = await AttendanceService.GetAllUsers();
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            users = await AttendanceService.GetAllUsers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to load users: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void EditUser(int id)
@@ -109,8 +192,16 @@
 
     private async Task DeleteUser(User user)
     {
-        await AttendanceService.DeleteUser(user.Id);
-        await LoadUsers();
+        errorMessage = null;
+        try
+        {
+            await AttendanceService.DeleteUser(user.Id);
+            await LoadUsers();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unable to delete user: {ex.Message}";
+        }
     }
 
     private string GetRoleBadgeClass(UserRole role) => role switch

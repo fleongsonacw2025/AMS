@@ -3,29 +3,33 @@
 @using AMS.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject AttendanceService AttendanceService
+@inject NavigationManager Nav
 
 <PageTitle>Leave Management - AMS</PageTitle>
 
-<div class="container mt-4">
-    <h3 class="mb-3">Leave Management</h3>
+@if (AttendanceService.CurrentUser != null)
+{
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3>Leave Management</h3>
+            <span class="badge bg-primary fs-6">Remaining Leave Balance: @AttendanceService.CurrentUser.LeaveBalanceDays.ToString("0.#") days</span>
+        </div>
 
-    @if (AttendanceService.CurrentUser == null)
-    {
-        <div class="alert alert-warning">Please log in to manage leave requests.</div>
-    }
-    else
-    {
         <div class="row">
             <!-- Submit Leave Form -->
             <div class="col-md-5 mb-4">
-                <div class="card shadow-sm">
+                <div class="card shadow-sm mb-4">
                     <div class="card-header bg-primary text-white">
                         <h5 class="card-title mb-0">Apply for Leave</h5>
                     </div>
                     <div class="card-body">
+                        @if (!string.IsNullOrEmpty(validationError))
+                        {
+                            <div class="alert alert-danger py-2">@validationError</div>
+                        }
+
                         <EditForm Model="newLeave" OnValidSubmit="HandleSubmit">
                             <DataAnnotationsValidator />
-                            <ValidationSummary />
 
                             <div class="mb-3">
                                 <label class="form-label">Leave Type</label>
@@ -56,45 +60,85 @@
                         </EditForm>
                     </div>
                 </div>
+
+                <!-- Admin Manual Leave Balance Editor -->
+                @if (AttendanceService.CurrentUser.Role == UserRole.Admin || AttendanceService.CurrentUser.Role == UserRole.SystemAdmin)
+                {
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-dark text-white">
+                            <h6 class="mb-0">Admin: Set Employee Leave Balance</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <label class="form-label small fw-bold">Employee</label>
+                                <select class="form-select form-select-sm" @bind="selectedBalanceUserId">
+                                    @foreach (var u in allUsers)
+                                    {
+                                        <option value="@u.Id">@u.FullName (Current: @u.LeaveBalanceDays days)</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <input type="number" step="0.5" class="form-control" @bind="updatedBalanceDays" placeholder="Days" />
+                                <button class="btn btn-outline-primary" @onclick="SaveLeaveBalance">Update Balance</button>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
 
-            <!-- Leave Request Lists -->
+            <!-- Leave Request Lists & Attendance Calendar -->
             <div class="col-md-7 mb-4">
                 <!-- Pending Approvals for Supervisors/Admins -->
-                @if (AttendanceService.CurrentUser.Role != UserRole.Cleaner)
+                @if (AttendanceService.CurrentUser.Role >= UserRole.Supervisor)
                 {
                     <div class="card shadow-sm mb-4">
                         <div class="card-header bg-warning text-dark">
                             <h5 class="card-title mb-0">Pending Approvals</h5>
                         </div>
                         <div class="card-body p-0">
-                            <table class="table table-hover mb-0">
+                            <table class="table table-hover align-middle mb-0">
                                 <thead>
                                     <tr>
                                         <th>Employee</th>
-                                        <th>Type</th>
-                                        <th>Dates</th>
-                                        <th>Reason</th>
+                                        <th>Type / Dates</th>
+                                        <th>Supervisor Comment</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @if (!pendingRequests.Any())
                                     {
-                                        <tr><td colspan="5" class="text-center py-3 text-muted">No pending leave requests.</td></tr>
+                                        <tr><td colspan="4" class="text-center py-3 text-muted">No pending leave requests.</td></tr>
                                     }
                                     else
                                     {
                                         @foreach (var req in pendingRequests)
                                         {
                                             <tr>
-                                                <td>@req.User?.FullName</td>
-                                                <td><span class="badge bg-info text-dark">@req.LeaveType</span></td>
-                                                <td>@req.StartDate.ToString("MMM dd") - @req.EndDate.ToString("MMM dd")</td>
-                                                <td>@req.Reason</td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-success me-1" @onclick="() => Approve(req.Id)">Approve</button>
-                                                    <button class="btn btn-sm btn-danger" @onclick="() => Reject(req.Id)">Reject</button>
+                                                    <div class="fw-bold">@req.User?.FullName</div>
+                                                    <small class="text-muted">@req.Reason</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-info text-dark">@req.LeaveType</span><br />
+                                                    <small>@req.StartDate.ToString("MMM dd") - @req.EndDate.ToString("MMM dd")</small>
+                                                </td>
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm"
+                                                           placeholder="Optional note..."
+                                                           @bind="reviewerNotesMap[req.Id]" />
+                                                </td>
+                                                <td>
+                                                    @if (req.UserId == AttendanceService.CurrentUser.Id)
+                                                    {
+                                                        <span class="text-muted small fst-italic">Own request</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-sm btn-success me-1" @onclick="() => Approve(req.Id)">Approve</button>
+                                                        <button class="btn btn-sm btn-danger" @onclick="() => Reject(req.Id)">Reject</button>
+                                                    }
                                                 </td>
                                             </tr>
                                         }
@@ -104,6 +148,45 @@
                         </div>
                     </div>
                 }
+
+                <!-- Approved Leave Attendance Calendar -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Attendance &amp; Leave Calendar (@calendarMonth.ToString("MMMM yyyy"))</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-dark me-1" @onclick="() => ChangeMonth(-1)">‹</button>
+                            <button class="btn btn-sm btn-outline-dark" @onclick="() => ChangeMonth(1)">›</button>
+                        </div>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="row row-cols-7 g-1 text-center small">
+                            @for (int day = 1; day <= DateTime.DaysInMonth(calendarMonth.Year, calendarMonth.Month); day++)
+                            {
+                                var currentDate = new DateTime(calendarMonth.Year, calendarMonth.Month, day);
+                                var leavesOnDay = approvedMonthLeaves
+                                    .Where(l => l.StartDate.Date <= currentDate && l.EndDate.Date >= currentDate)
+                                    .ToList();
+
+                                <div class="col-3 col-md-2 border rounded p-1 @(leavesOnDay.Any() ? "bg-success bg-opacity-10 border-success" : "")">
+                                    <div class="fw-bold">@currentDate.ToString("MMM dd")</div>
+                                    @if (leavesOnDay.Any())
+                                    {
+                                        @foreach (var l in leavesOnDay)
+                                        {
+                                            <span class="badge bg-success d-block text-truncate mt-1" title="@l.User?.FullName (@l.LeaveType)">
+                                                On Leave: @(l.User?.FullName?.Split(' ').FirstOrDefault())
+                                            </span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted" style="font-size: 0.7rem;">—</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
 
                 <!-- User Personal History -->
                 <div class="card shadow-sm">
@@ -117,12 +200,13 @@
                                     <th>Type</th>
                                     <th>Dates</th>
                                     <th>Status</th>
+                                    <th>Reviewer Note</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @if (!myRequests.Any())
                                 {
-                                    <tr><td colspan="3" class="text-center py-3 text-muted">No leave requests found.</td></tr>
+                                    <tr><td colspan="4" class="text-center py-3 text-muted">No leave requests found.</td></tr>
                                 }
                                 else
                                 {
@@ -136,6 +220,7 @@
                                                     @req.Status
                                                 </span>
                                             </td>
+                                            <td>@(req.ReviewerNotes ?? "—")</td>
                                         </tr>
                                     }
                                 }
@@ -145,30 +230,68 @@
                 </div>
             </div>
         </div>
-    }
-</div>
+    </div>
+}
 
 @code {
     private LeaveRequest newLeave = new() { StartDate = DateTime.Today, EndDate = DateTime.Today };
     private List<LeaveRequest> myRequests = new();
     private List<LeaveRequest> pendingRequests = new();
+    private List<LeaveRequest> approvedMonthLeaves = new();
+    private List<User> allUsers = new();
+    private Dictionary<int, string> reviewerNotesMap = new();
+
+    private DateTime calendarMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private string validationError = "";
+    private int selectedBalanceUserId;
+    private double updatedBalanceDays = 15.0;
 
     protected override async Task OnInitializedAsync()
     {
+        if (AttendanceService.CurrentUser == null)
+        {
+            Nav.NavigateTo("/login", forceLoad: true);
+            return;
+        }
+
         await LoadData();
     }
 
     private async Task LoadData()
     {
         myRequests = await AttendanceService.GetUserLeaveRequests();
-        if (AttendanceService.CurrentUser?.Role != UserRole.Cleaner)
+        approvedMonthLeaves = await AttendanceService.GetApprovedLeavesForMonth(calendarMonth.Year, calendarMonth.Month);
+
+        if (AttendanceService.CurrentUser?.Role >= UserRole.Supervisor)
         {
             pendingRequests = await AttendanceService.GetPendingLeaveRequests();
+            foreach (var r in pendingRequests)
+            {
+                if (!reviewerNotesMap.ContainsKey(r.Id))
+                    reviewerNotesMap[r.Id] = string.Empty;
+            }
+        }
+
+        if (AttendanceService.CurrentUser?.Role == UserRole.Admin || AttendanceService.CurrentUser?.Role == UserRole.SystemAdmin)
+        {
+            allUsers = await AttendanceService.GetAllUsers();
+            if (allUsers.Any() && selectedBalanceUserId == 0)
+            {
+                selectedBalanceUserId = allUsers.First().Id;
+                updatedBalanceDays = allUsers.First().LeaveBalanceDays;
+            }
         }
     }
 
     private async Task HandleSubmit()
     {
+        validationError = "";
+        if (newLeave.EndDate.Date < newLeave.StartDate.Date)
+        {
+            validationError = "End date must be on or after the start date.";
+            return;
+        }
+
         await AttendanceService.SubmitLeaveRequest(newLeave);
         newLeave = new LeaveRequest { StartDate = DateTime.Today, EndDate = DateTime.Today };
         await LoadData();
@@ -176,13 +299,30 @@
 
     private async Task Approve(int id)
     {
-        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Approved);
+        reviewerNotesMap.TryGetValue(id, out var note);
+        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Approved, note);
         await LoadData();
     }
 
     private async Task Reject(int id)
     {
-        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Rejected);
+        reviewerNotesMap.TryGetValue(id, out var note);
+        await AttendanceService.UpdateLeaveStatus(id, RequestStatus.Rejected, note);
         await LoadData();
+    }
+
+    private async Task SaveLeaveBalance()
+    {
+        if (selectedBalanceUserId > 0)
+        {
+            await AttendanceService.UpdateEmployeeLeaveBalance(selectedBalanceUserId, updatedBalanceDays);
+            await LoadData();
+        }
+    }
+
+    private async Task ChangeMonth(int delta)
+    {
+        calendarMonth = calendarMonth.AddMonths(delta);
+        approvedMonthLeaves = await AttendanceService.GetApprovedLeavesForMonth(calendarMonth.Year, calendarMonth.Month);
     }
 }
